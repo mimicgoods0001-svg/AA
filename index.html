@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>PJSK 吧唧合成大挑战</title>
+    <!-- Phaser 加载：优先使用本地文件，失败则尝试多个 CDN -->
+    <script>
+        // 加载 Phaser，确保加载完成后再执行游戏代码
+        function loadPhaser() {
+            // 优先尝试本地 lib/phaser.min.js（Phaser 3.60.0 已内置 Matter 物理引擎）
+            const script = document.createElement('script');
+            script.src = 'lib/phaser.min.js';
+            script.onerror = function() {
+                // 本地文件不存在，尝试 jsDelivr CDN
+                const script2 = document.createElement('script');
+                script2.src = 'https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js';
+                script2.onerror = function() {
+                    // jsDelivr 失败，换 unpkg
+                    const script3 = document.createElement('script');
+                    script3.src = 'https://unpkg.com/phaser@3.60.0/dist/phaser.min.js';
+                    script3.onerror = function() {
+                        // unpkg 也失败，换 cdnjs
+                        const script4 = document.createElement('script');
+                        script4.src = 'https://cdnjs.cloudflare.com/ajax/libs/phaser/3.60.0/phaser.min.js';
+                        script4.onload = initGame;
+                        script4.onerror = function() {
+                            // 所有 CDN 都失败，显示详细错误信息
+                            document.body.innerHTML = '<div style="padding: 50px; text-align: center; font-family: Arial; background: #1a1a2e; color: #fff; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center;"><h1>❌ Phaser 加载失败</h1><p style="font-size: 18px; margin: 20px 0;">无法从 CDN 加载 Phaser 库，请尝试以下方法：</p><div style="text-align: left; max-width: 600px; background: #2a2a3e; padding: 20px; border-radius: 10px; margin: 20px;"><h3>方法 1：使用本地服务器（推荐）</h3><p>在项目目录运行：<code style="background: #1a1a2e; padding: 5px 10px; border-radius: 5px;">.\server.ps1</code></p><p>然后访问：<code style="background: #1a1a2e; padding: 5px 10px; border-radius: 5px;">http://localhost:8000</code></p><h3>方法 2：手动下载 Phaser</h3><p>1. 确保 <code style="background: #1a1a2e; padding: 5px 10px; border-radius: 5px;">lib</code> 文件夹存在</p><p>2. 下载文件到 <code style="background: #1a1a2e; padding: 5px 10px; border-radius: 5px;">lib/phaser.min.js</code></p><p>下载地址：<a href="https://cdn.jsdelivr.net/npm/phaser@3.60.0/dist/phaser.min.js" style="color: #4a9eff;">点击下载</a></p><p style="margin-top: 10px; color: #aaa;">注意：Phaser 3.60.0 已内置 Matter 物理引擎，使用 phaser.min.js 即可</p></div></div>';
+                        };
+                        document.head.appendChild(script4);
+                    };
+                    script3.onload = initGame;
+                    document.head.appendChild(script3);
+                };
+                script2.onload = initGame;
+                document.head.appendChild(script2);
+            };
+            script.onload = initGame;
+            document.head.appendChild(script);
+        }
+        
+        // 等待 Phaser 加载完成后初始化游戏
+        function initGame() {
+            if (!window.Phaser) {
+                // 再等一小段时间
+                setTimeout(initGame, 100);
+                return;
+            }
+            // Phaser 已加载，加载游戏代码
+            const gameScript = document.createElement('script');
+            gameScript.src = 'game.js';
+            gameScript.onerror = function() {
+                console.error('无法加载 game.js，使用内嵌代码');
+                startGame();
+            };
+            document.body.appendChild(gameScript);
+        }
+        
+        // 页面加载完成后开始加载 Phaser
+        window.addEventListener('DOMContentLoaded', loadPhaser);
+    </script>
+    <style>
+        * { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+        html, body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+            height: 100%;
+            height: 100dvh;
+            min-height: -webkit-fill-available;
+            font-family: 'Arial', sans-serif;
+            touch-action: manipulation;
+            -webkit-text-size-adjust: 100%;
+        }
+        #game-container {
+            width: 100%;
+            height: 100%;
+            min-height: -webkit-fill-available;
+        }
+    </style>
+</head>
+<body>
+
+<div id="game-container"></div>
+
+<script>
+// 游戏初始化函数：确保 Phaser 加载完成后再执行（仅作为备用）
+function startGame() {
+/**
+ * 吧唧等级配置
+ */
+const BADGE_LEVELS = [
+    { level: 1, radius: 25, score: 5, color: 0x87CEEB, name: '纽扣-一歌' },
+    { level: 2, radius: 35, score: 10, color: 0xFFA07A, name: '纽扣-咲希' },
+    { level: 3, radius: 45, score: 15, color: 0x98FB98, name: '纽扣-穗波' },
+    { level: 4, radius: 55, score: 25, color: 0xDDA0DD, name: '纽扣-志步' },
+    { level: 5, radius: 70, score: 50, color: 0xF0E68C, name: '队服-实乃理' },
+    { level: 6, radius: 85, score: 100, color: 0x87FBEB, name: '队服-遥' },
+    { level: 7, radius: 100, score: 500, color: 0xFFB6C1, name: '队服-爱莉' },
+    { level: 8, radius: 120, score: 1000, color: 0xADD8E6, name: '队服-雫' },
+    { level: 9, radius: 140, score: 2000, color: 0xFFD700, name: '人鱼-宁宁' },
+    { level: 10, radius: 165, score: 5000, color: 0xFF4500, name: '限定-类' },
+    { level: 11, radius: 200, score: 88888, color: 0xFFFFFF, name: '糕特-初音未来' }
+];
+
+class MainScene extends Phaser.Scene {
+    constructor() {
+        super({ key: 'MainScene' });
+        this.score = 0;
+        this.gameOver = false;
+        this.isDropping = false;
+    }
+
+    preload() {
+        // 如果你有本地图片，可以按照以下格式加载：
+        // this.load.image('badge_1', 'assets/1_ctn.png');
+        // ... 直到 level 11
+    }
+
+    create() {
+        const { width, height } = this.scale;
+        
+        // 1. 设置物理世界边界（左、右、底）
+        this.matter.world.setBounds(0, 0, width, height, 32, true, true, false, true);
+
+        // 2. 创建背景和斩杀线
+        this.add.graphics()
+            .fillGradientStyle(0x1a1a2e, 0x1a1a2e, 0x16213e, 0x16213e, 1)
+            .fillRect(0, 0, width, height);
+
+        const killLineY = height / 6;
+        this.killLine = this.add.graphics();
+        this.killLine.lineStyle(3, 0xff0000, 0.5);
+        this.killLine.lineBetween(0, killLineY, width, killLineY);
+
+        // 3. 分数显示
+        this.scoreText = this.add.text(20, 30, '身价: $0', {
+            fontSize: '32px',
+            fill: '#fff',
+            fontStyle: 'bold'
+        });
+
+        // 4. 监听点击事件
+        this.input.on('pointerdown', (pointer) => {
+            if (this.gameOver || this.isDropping) return;
+            this.dropBadge(pointer.x, killLineY - 50);
+        });
+
+        // 5. 核心碰撞检测
+        this.matter.world.on('collisionstart', (event) => {
+            event.pairs.forEach(pair => {
+                this.handleMerge(pair.bodyA, pair.bodyB);
+            });
+        });
+    }
+
+    dropBadge(x, y) {
+        this.isDropping = true;
+        // 随机生成 1-3 级的吧唧
+        const level = Phaser.Math.Between(1, 3);
+        this.createBadge(x, y, level);
+        
+        // 设置冷却时间，防止连续快速点击
+        this.time.delayedCall(500, () => {
+            this.isDropping = false;
+        });
+    }
+
+    /**
+     * 创建吧唧物体
+     */
+    createBadge(x, y, level, isMerged = false) {
+        const config = BADGE_LEVELS[level - 1];
+        
+        // 使用 Graphics 创建圆形作为代替（如果有图片可换成 add.image）
+        const container = this.add.container(x, y);
+        const circle = this.add.graphics();
+        circle.fillStyle(config.color, 1);
+        circle.fillCircle(0, 0, config.radius);
+        circle.lineStyle(4, 0xffffff, 0.8);
+        circle.strokeCircle(0, 0, config.radius);
+        
+        // 添加等级文字
+        const label = this.add.text(0, 0, level, { fontSize: config.radius + 'px', color: '#000' }).setOrigin(0.5);
+        container.add([circle, label]);
+
+        // 绑定物理属性
+        const body = this.matter.add.circle(x, y, config.radius, {
+            restitution: 0.3,
+            friction: 0.1,
+            label: 'badge'
+        });
+
+        // 将物理体与容器绑定
+        this.matter.add.gameObject(container, body);
+        container.setData('level', level);
+
+        // 如果是合成生成的，播放一个放大动画
+        if (isMerged) {
+            container.setScale(0);
+            this.tweens.add({
+                targets: container,
+                scale: 1,
+                duration: 200,
+                ease: 'Back.easeOut'
+            });
+        }
+
+        return container;
+    }
+
+    /**
+     * 处理合成逻辑：A 掉到 B 上，B 升级，A 消失
+     */
+    handleMerge(bodyA, bodyB) {
+        const objA = bodyA.gameObject;
+        const objB = bodyB.gameObject;
+
+        if (!objA || !objB || !objA.active || !objB.active) return;
+
+        const levelA = objA.getData('level');
+        const levelB = objB.getData('level');
+
+        // 如果等级相同且不是最高等级
+        if (levelA === levelB && levelA < 11) {
+            const nextLevel = levelA + 1;
+            
+            // 改为：A 掉到 B 上 → 只升级 B，A 直接消失
+            // 用 y 更大的作为 B（更"在下方/被砸到"的那个）
+            const bB = (objA.y >= objB.y) ? objA : objB;
+            const bA = (bB === objA) ? objB : objA;
+
+            // 1) A 彻底移除
+            if (bA.body) this.matter.world.remove(bA.body);
+            bA.destroy();
+
+            // 2) B 原地进化：更新等级、图形大小、物理体
+            const nextConfig = BADGE_LEVELS[nextLevel - 1];
+            bB.setData('level', nextLevel);
+            
+            // 更新容器内的图形和文字
+            bB.list.forEach(child => {
+                if (child.type === 'Graphics') {
+                    // 清除旧图形，重绘新大小
+                    child.clear();
+                    child.fillStyle(nextConfig.color, 1);
+                    child.fillCircle(0, 0, nextConfig.radius);
+                    child.lineStyle(4, 0xffffff, 0.8);
+                    child.strokeCircle(0, 0, nextConfig.radius);
+                } else if (child.type === 'Text') {
+                    // 更新文字
+                    child.setText(nextLevel);
+                    child.setFontSize(nextConfig.radius + 'px');
+                }
+            });
+
+            // 更新物理体大小
+            if (bB.body) {
+                this.matter.world.remove(bB.body);
+                const newBody = this.matter.add.circle(bB.x, bB.y, nextConfig.radius, {
+                    restitution: 0.3,
+                    friction: 0.1,
+                    label: 'badge'
+                });
+                this.matter.add.gameObject(bB, newBody);
+            }
+
+            // 播放升级动画
+            bB.setScale(0.5);
+            this.tweens.add({
+                targets: bB,
+                scale: 1,
+                duration: 200,
+                ease: 'Back.easeOut'
+            });
+
+            // 3. 更新分数
+            this.score += nextConfig.score;
+            this.scoreText.setText(`身价: $${this.score.toLocaleString()}`);
+
+            // 4. 胜利检查
+            if (nextLevel === 11) {
+                this.endGame(true);
+            }
+        }
+    }
+
+    update() {
+        if (this.gameOver) return;
+
+        // 检查失败条件：是否有吧唧超过斩杀线
+        // (简单逻辑：检查所有吧唧的 y 坐标)
+        // 注意：刚掉落的吧唧不计入
+    }
+
+    endGame(isWin) {
+        this.gameOver = true;
+        const msg = isWin ? "🎉 恭喜！你合成了糕特！" : "💔 仓库爆满，退坑跑路！";
+        alert(msg + "\n最终身价: $" + this.score);
+        location.reload();
+    }
+}
+
+// 游戏配置
+const config = {
+    type: Phaser.AUTO,
+    width: window.innerWidth,
+    height: window.innerHeight,
+    parent: 'game-container',
+    physics: {
+        default: 'matter',
+        matter: {
+            gravity: { y: 0.8 },
+            debug: false // 开启 debug 可以看到物理碰撞轮廓
+        }
+    },
+    scene: MainScene
+};
+
+const game = new Phaser.Game(config);
+
+// 窗口自适应
+window.addEventListener('resize', () => {
+    game.scale.resize(window.innerWidth, window.innerHeight);
+});
+} // 结束 startGame 函数
+</script>
+
+</body>
+</html>
