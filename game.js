@@ -22,6 +22,7 @@
  * v1.1.5 - 结算画面布局调整、合成次数改为合计市价、修复分享图片黑屏
  * v1.1.6 - 恢复结算页UI调整、流星背景效果
  * v1.1.7 - 流星加速、随机生成数量、随机起点
+ * v1.1.8 - 统一合成糕特成功POPUP设计；合成糕特成功后继续玩被斩杀线判定失败时按成功处理
  */
 
 // 屏幕尺寸计算（考虑移动端浏览器UI）
@@ -1333,50 +1334,92 @@ class MainScene extends Phaser.Scene {
     }
 
     /**
-     * 胜利弹窗：合成 11 级后询问「结束游戏」或「继续游戏」
+     * v1.1.8: 胜利弹窗：合成 11 级后询问「结束游戏」或「继续游戏」
+     * 设计统一：与开始游戏、结算画面POPUP的设计一致（粉红色和浅蓝色主题）
      */
     showWinPopup() {
         const cx = px(GAME_WIDTH / 2);
         const cy = px(GAME_HEIGHT / 2);
         
-        const overlay = this.add.rectangle(cx, cy, px(GAME_WIDTH), px(GAME_HEIGHT), 0x000000, 0.6).setDepth(200).setInteractive();
-        const panel = this.add.rectangle(cx, cy, px(GAME_WIDTH * 0.85), px(220), 0x2a2a3e, 0.98).setDepth(201).setStrokeStyle(px(4), 0xffd700);
-        const tTitle = this.add.text(cx, cy - px(70), '🎉 恭喜合成糕特！', {
-            fontSize: fs(28), fill: '#ffd700', fontFamily: 'Arial', fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(202);
-        const tSub = this.add.text(cx, cy - px(30), '是否结束游戏？', {
-            fontSize: fs(20), fill: '#fff', fontFamily: 'Arial'
-        }).setOrigin(0.5).setDepth(202);
+        // v1.1.8: 背景遮罩（与开始游戏、结算画面一致）
+        const overlay = this.add.rectangle(cx, cy, px(GAME_WIDTH), px(GAME_HEIGHT), 0x000000, 0.7).setDepth(200).setInteractive();
         
-        const btnEnd = this.add.rectangle(cx - px(90), cy + px(40), px(140), px(44), 0xe74c3c, 1)
+        // v1.1.8: 主面板（粉红色和浅蓝色主题，与开始游戏、结算画面一致）
+        const panelW = px(Math.min(GAME_WIDTH * 0.88, 500));
+        const panelH = px(450);
+        const panelBg = this.add.rectangle(cx, cy, panelW, panelH, 0xF8D5D2, 0.95).setDepth(201);
+        const panelBorder = this.add.rectangle(cx, cy, panelW, panelH, 0xA4B4C4, 0).setDepth(201).setStrokeStyle(px(4), 0xFFB6C1, 1);
+        
+        let y = cy - panelH / 2 + px(40);
+        
+        // v1.1.8: 标题（与开始游戏、结算画面一致）
+        const tTitle = this.add.text(cx, y, '🎉 恭喜合成糕特！', {
+            fontSize: fs(28),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold',
+            stroke: '#A4B4C4',
+            strokeThickness: px(2)
+        }).setOrigin(0.5).setDepth(202);
+        y += px(50);
+        
+        // v1.1.8: 副标题（与开始游戏、结算画面一致）
+        const tSub = this.add.text(cx, y, '是否结束游戏？', {
+            fontSize: fs(18),
+            fill: '#666',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5, 0).setDepth(202).setWordWrapWidth(panelW - px(60));
+        y += tSub.height + px(50);
+        
+        // v1.1.8: 按钮组（与开始游戏、结算画面一致）
+        const btnW = px(200);
+        const btnH = px(44);
+        const btnSpacing = px(20);
+        
+        // v1.1.8: 结束游戏按钮（浅蓝色，与结算画面一致）
+        const btnEnd = this.add.rectangle(cx, y, btnW, btnH, 0xA4B4C4, 1)
             .setInteractive({ useHandCursor: true }).setDepth(202)
-            .on('pointerover', function() { this.setFillStyle(0xec7063); })
-            .on('pointerout', function() { this.setFillStyle(0xe74c3c); });
-        const t1 = this.add.text(cx - px(90), cy + px(40), '结束游戏', {
-            fontSize: fs(18), fill: '#fff', fontFamily: 'Arial', fontStyle: 'bold'
+            .setStrokeStyle(px(2), 0xFFB6C1, 1)
+            .on('pointerover', function() { this.setScale(1.05); })
+            .on('pointerout', function() { this.setScale(1); });
+        const t1 = this.add.text(cx, y, '结束游戏', {
+            fontSize: fs(16),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(203);
+        y += btnH + btnSpacing;
+        
+        // v1.1.8: 继续游戏按钮（粉色，与结算画面一致）
+        const btnGo = this.add.rectangle(cx, y, btnW, btnH, 0xFFB6C1, 1)
+            .setInteractive({ useHandCursor: true }).setDepth(202)
+            .setStrokeStyle(px(2), 0xFFC0CB, 1)
+            .on('pointerover', function() { this.setScale(1.05); })
+            .on('pointerout', function() { this.setScale(1); });
+        const t2 = this.add.text(cx, y, '继续游戏', {
+            fontSize: fs(16),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(203);
         
-        const btnGo = this.add.rectangle(cx + px(90), cy + px(40), px(140), px(44), 0x27ae60, 1)
-            .setInteractive({ useHandCursor: true }).setDepth(202)
-            .on('pointerover', function() { this.setFillStyle(0x2ecc71); })
-            .on('pointerout', function() { this.setFillStyle(0x27ae60); });
-        const t2 = this.add.text(cx + px(90), cy + px(40), '继续游戏', {
-            fontSize: fs(18), fill: '#fff', fontFamily: 'Arial', fontStyle: 'bold'
-        }).setOrigin(0.5).setDepth(203);
-        
-        const winRefs = [overlay, panel, tTitle, tSub, btnEnd, btnGo, t1, t2];
+        const winRefs = [overlay, panelBg, panelBorder, tTitle, tSub, btnEnd, btnGo, t1, t2];
         const closeWin = () => { winRefs.forEach(o => o && o.destroy && o.destroy()); };
         btnEnd.on('pointerdown', () => { closeWin(); this.endGame(true); });
         btnGo.on('pointerdown', () => { closeWin(); });
     }
 
     /**
-     * 结束游戏
+     * v1.1.8: 结束游戏
+     * 如果已合成糕特（hasWon），即使被斩杀线判定失败，也按成功处理
      */
     endGame(isWin) {
         if (gameState.gameOver) return;
         
         gameState.gameOver = true;
+        
+        // v1.1.8: 如果已合成糕特，即使被斩杀线判定失败，也按成功处理
+        const finalIsWin = isWin || gameState.hasWon;
         
         // v1.1.2: 停止背景音乐（3秒渐出）
         if (this.currentBgm && this.currentBgm.isPlaying) {
@@ -1406,7 +1449,7 @@ class MainScene extends Phaser.Scene {
         }
         
         this.time.delayedCall(500, () => {
-            this.showResultScreen(isWin);
+            this.showResultScreen(finalIsWin);
         });
     }
 
