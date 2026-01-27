@@ -23,6 +23,8 @@
  * v1.1.6 - 恢复结算页UI调整、流星背景效果
  * v1.1.7 - 流星加速、随机生成数量、随机起点
  * v1.1.8 - 统一合成糕特成功POPUP设计；合成糕特成功后继续玩被斩杀线判定失败时按成功处理
+ * v1.1.9 - 音乐渐入渐出增加到5秒；新增吧唧图片（5级2款、6级1款、糕特2款）；关注Mimic谷店按钮颜色统一为#cd0303；设置按钮改为？icon并新增提示文案；昼间模式新增5种随机背景色；修复Safari切换后背景音乐消失问题
+ * v1.2.0 - 结算页面"朕知道了"按钮改为H5内部重置，不刷新页面
  */
 
 // 屏幕尺寸计算（考虑移动端浏览器UI）
@@ -32,8 +34,23 @@ const screenSize = (() => {
     return { width, height };
 })();
 
-const GAME_WIDTH = screenSize.width;
-const GAME_HEIGHT = screenSize.height;
+// 检测是否为移动设备
+const isMobileDevice = (() => {
+    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
+})();
+
+// 方案A：WEB端限制为iPhone最大尺寸（430x932），移动端保持自适应
+const MAX_IPHONE_WIDTH = 430;
+const MAX_IPHONE_HEIGHT = 932;
+
+const GAME_WIDTH = isMobileDevice 
+    ? screenSize.width  // 移动端：使用实际屏幕尺寸
+    : Math.min(screenSize.width, MAX_IPHONE_WIDTH);  // WEB端：限制最大宽度
+
+const GAME_HEIGHT = isMobileDevice 
+    ? screenSize.height  // 移动端：使用实际屏幕尺寸
+    : Math.min(screenSize.height, MAX_IPHONE_HEIGHT);  // WEB端：限制最大高度
 const KILL_LINE_Y = GAME_HEIGHT / 6.67;       // 斩杀线位置（屏幕上方1/6.67处）
 const PREVIEW_Y = KILL_LINE_Y - 50;           // 预览下一吧唧的 y（斩杀线上方居中）
 const KILL_PROTECTION_MS = 2000;              // 新吧唧释放后保护时间（毫秒）
@@ -51,13 +68,13 @@ const BADGE_LEVELS = [
     { level: 2, radius: 31, score: 45, name: '纽扣', variants: ['2_tks.png', '2_akt.png', '2_shiho.png'] },
     { level: 3, radius: 39, score: 45, name: '纽扣', variants: ['3_emu.png', '3_khn.png', '3_ick.png'] },
     { level: 4, radius: 44, score: 45, name: '纽扣', variants: ['4_rui.png', '4_toya.png', '4_hnm.png'] },
-    { level: 5, radius: 47, score: 100, name: '新队服', variants: ['5_ena.png', '5_airi.png'] },
-    { level: 6, radius: 62, score: 100, name: '新队服', variants: ['6_mzk.png', '6_szk.png'] },
+    { level: 5, radius: 47, score: 100, name: '新队服', variants: ['5_ena.png', '5_airi.png', '5_nene.png', '5_tks.png'] },
+    { level: 6, radius: 62, score: 100, name: '新队服', variants: ['6_mzk.png', '6_szk.png', '6_emu.png'] },
     { level: 7, radius: 68, score: 100, name: '新队服', variants: ['7_mfy.png', '7_mnr.png'] },
     { level: 8, radius: 74, score: 100, name: '新队服', variants: ['8_knd.png', '8_hrk.png'] },
-    { level: 9, radius: 80, score: 300, name: '人鱼', variants: ['9_ng.png', '9_tks.png'] },
-    { level: 10, radius: 86, score: 300, name: 'idk', variants: ['10_idk.png', '10_knd.png'] },
-    { level: 11, radius: 95, score: 3000, name: '糕特', variants: ['gaote/saki.png', 'gaote/airi.png', 'gaote/akt.png', 'gaote/an.png', 'gaote/emu.png', 'gaote/ena.png', 'gaote/hnm.png', 'gaote/hrk.png', 'gaote/knd.png', 'gaote/mfy.png', 'gaote/mnr.png', 'gaote/mzk.png', 'gaote/nene.png', 'gaote/rui.png', 'gaote/shiho.png', 'gaote/szk.png', 'gaote/tks.png', 'gaote/toya.png'] }
+    { level: 9, radius: 80, score: 300, name: '人鱼', variants: ['9_ng.png', '9_tks.png', '9_saki.png'] },
+    { level: 10, radius: 86, score: 300, name: 'idk', variants: ['10_idk.png', '10_knd.png', '10_airi.png'] },
+    { level: 11, radius: 95, score: 3000, name: '糕特', variants: ['gaote/saki.png', 'gaote/airi.png', 'gaote/akt.png', 'gaote/an.png', 'gaote/emu.png', 'gaote/ena.png', 'gaote/hnm.png', 'gaote/hrk.png', 'gaote/ick.png', 'gaote/khn.png', 'gaote/knd.png', 'gaote/mfy.png', 'gaote/mnr.png', 'gaote/mzk.png', 'gaote/nene.png', 'gaote/rui.png', 'gaote/shiho.png', 'gaote/szk.png', 'gaote/tks.png', 'gaote/toya.png'] }
 ];
 
 // 称号系统
@@ -73,6 +90,7 @@ const TITLES = [
 let gameState = {
     currentTheme: 'day', // 'day' 或 'night'
     selectedVariant: {}, // 每局随机选定的角色变体
+    selectedDayBackground: null, // v1.1.9: 每局随机选定的昼间背景色
     totalScore: 0,
     gameOver: false,
     badges: [], // 所有吧唧对象
@@ -156,6 +174,9 @@ class MainScene extends Phaser.Scene {
         
         // 设置碰撞检测
         this.setupCollision();
+        
+        // v1.1.9: 添加页面可见性监听，修复Safari切换后背景音乐消失的问题
+        this.setupVisibilityListener();
     }
 
     initGame() {
@@ -163,6 +184,16 @@ class MainScene extends Phaser.Scene {
         BADGE_LEVELS.forEach(level => {
             gameState.selectedVariant[level.level] = Phaser.Utils.Array.GetRandom(level.variants);
         });
+        
+        // v1.1.9: 每局随机选择昼间背景色
+        const dayBackgrounds = [
+            { color1: 0xE0EAFC, color2: 0xCFDEF3 }, // 浅淡紫白 → 清透淡蓝
+            { color1: 0xFFD1FF, color2: 0x9EB8DA }, // 淡紫粉 → 静谧蓝
+            { color1: 0xBEE1E6, color2: 0xFAD2E1 }, // 薄荷绿 → 樱花粉
+            { color1: 0xF8EDEB, color2: 0xD8E2DC }, // 米色/奶油 → 雾面绿
+            { color1: 0xD7E3FC, color2: 0xCCDBFD }  // 浅冰蓝 → 浅灰紫
+        ];
+        gameState.selectedDayBackground = Phaser.Utils.Array.GetRandom(dayBackgrounds);
         
         // 重置游戏状态
         gameState.totalScore = 0;
@@ -272,7 +303,8 @@ class MainScene extends Phaser.Scene {
             })
             .on('pointerover', function() { this.setScale(1.1); })
             .on('pointerout', function() { this.setScale(1); });
-        this.settingsText = this.add.text(settingsX, settingsY, '📢', {
+        // v1.1.9: 改为？icon，向右移4px（2px + 5px - 3px）
+        this.settingsText = this.add.text(settingsX + px(4), settingsY, '？', {
             fontSize: fs(20),
             fill: '#fff',
             fontFamily: 'Arial'
@@ -382,11 +414,12 @@ class MainScene extends Phaser.Scene {
             .setStrokeStyle(px(3), 0xFFC0CB, 1)
             .on('pointerdown', () => {
                 // v1.1.2: 停止OP音乐，开始背景音乐（3秒渐出）
+                // v1.1.9: 渐出增加到5秒
                 if (this.opMusic) {
                     this.tweens.add({
                         targets: this.opMusic,
                         volume: 0,
-                        duration: 3000,
+                        duration: 5000,
                         onComplete: () => {
                             if (this.opMusic) this.opMusic.stop();
                             this.opMusic = null;
@@ -415,9 +448,10 @@ class MainScene extends Phaser.Scene {
         y += px(60);
         
         // 关注Mimic谷店按钮（v1.1.2: iOS兼容跳转，改为粉色）
-        const btnMimic = this.add.rectangle(cx, y, px(240), px(44), 0xFFB6C1, 1)
+        // v1.1.9: 颜色统一为#cd0303
+        const btnMimic = this.add.rectangle(cx, y, px(240), px(44), 0xcd0303, 1)
             .setInteractive({ useHandCursor: true }).setDepth(302)
-            .setStrokeStyle(px(2), 0xFFC0CB, 1)
+            .setStrokeStyle(px(2), 0xcd0303, 1)
             .on('pointerdown', () => {
                 // v1.1.4: 使用网页链接跳转（iOS兼容）
                 window.location.href = MIMIC_URL;
@@ -457,38 +491,39 @@ class MainScene extends Phaser.Scene {
         
         // v1.1.2: 播放OP音乐（2秒渐入）
         // v1.1.3: 修复播放问题 - 延迟播放确保音频已加载
+        // v1.1.9: 渐入增加到5秒
         this.time.delayedCall(100, () => {
             if (this.cache.audio.exists('op')) {
                 try {
                     this.opMusic = this.sound.add('op', { volume: 0, loop: false });
                     this.opMusic.play();
-                    // 3秒渐入，分4个阶段：第一秒10%，第二秒40%，第三秒70%，第四秒100%
+                    // v1.1.9: 5秒渐入，分4个阶段：第一秒10%，第二秒40%，第三秒70%，第四秒100%
                     const targetVolume = gameState.bgmVolume;
                     this.opMusic.setVolume(0);
                     
-                    // 第一阶段：0 -> 10% (0-0.75秒)
+                    // 第一阶段：0 -> 10% (0-1.25秒)
                     this.tweens.add({
                         targets: this.opMusic,
                         volume: targetVolume * 0.1,
-                        duration: 750,
+                        duration: 1250,
                         onComplete: () => {
-                            // 第二阶段：10% -> 40% (0.75-1.5秒)
+                            // 第二阶段：10% -> 40% (1.25-2.5秒)
                             this.tweens.add({
                                 targets: this.opMusic,
                                 volume: targetVolume * 0.4,
-                                duration: 750,
+                                duration: 1250,
                                 onComplete: () => {
-                                    // 第三阶段：40% -> 70% (1.5-2.25秒)
+                                    // 第三阶段：40% -> 70% (2.5-3.75秒)
                                     this.tweens.add({
                                         targets: this.opMusic,
                                         volume: targetVolume * 0.7,
-                                        duration: 750,
+                                        duration: 1250,
                                         onComplete: () => {
-                                            // 第四阶段：70% -> 100% (2.25-3秒)
+                                            // 第四阶段：70% -> 100% (3.75-5秒)
                                             this.tweens.add({
                                                 targets: this.opMusic,
                                                 volume: targetVolume,
-                                                duration: 750
+                                                duration: 1250
                                             });
                                         }
                                     });
@@ -551,9 +586,10 @@ class MainScene extends Phaser.Scene {
         // 创建新背景（v1.0.8: 物理像素）
         const W = px(GAME_WIDTH), H = px(GAME_HEIGHT);
         if (gameState.currentTheme === 'day') {
-            // 昼间：双色渐变 #F8D5D2 和 #A4B4C4
+            // v1.1.9: 昼间：5种随机背景色，每局游戏随机使用
             this.background = this.add.graphics();
-            this.background.fillGradientStyle(0xF8D5D2, 0xF8D5D2, 0xA4B4C4, 0xA4B4C4, 1);
+            const bg = gameState.selectedDayBackground || { color1: 0xF8D5D2, color2: 0xA4B4C4 }; // 默认值（兼容旧版本）
+            this.background.fillGradientStyle(bg.color1, bg.color1, bg.color2, bg.color2, 1);
             this.background.fillRect(0, 0, W, H);
         } else {
             // 夜间：深色渐变
@@ -1073,12 +1109,12 @@ class MainScene extends Phaser.Scene {
         const key = this.bgmList[this.currentBgmIndex];
         
         if (this.cache.audio.exists(key)) {
-            // 淡出当前音乐（3秒渐出）
+            // v1.1.9: 淡出当前音乐（5秒渐出）
             if (this.currentBgm && this.currentBgm.isPlaying) {
                 this.tweens.add({
                     targets: this.currentBgm,
                     volume: 0,
-                    duration: 3000,
+                    duration: 5000,
                     onComplete: () => {
                         if (this.currentBgm) this.currentBgm.stop();
                         this.playBgmWithFade(key);
@@ -1093,39 +1129,40 @@ class MainScene extends Phaser.Scene {
     /**
      * v1.1.2: 播放背景音乐（带渐入）
      * 修改：3秒渐入，分4个阶段（10% -> 40% -> 70% -> 100%）
+     * v1.1.9: 渐入增加到5秒
      */
     playBgmWithFade(key) {
         if (this.currentBgm) this.currentBgm.stop();
         this.currentBgm = this.sound.add(key, { volume: 0, loop: false });
         this.currentBgm.play();
         
-        // 3秒渐入，分4个阶段：第一秒10%，第二秒40%，第三秒70%，第四秒100%
+        // v1.1.9: 5秒渐入，分4个阶段：第一秒10%，第二秒40%，第三秒70%，第四秒100%
         const targetVolume = gameState.bgmVolume;
         this.currentBgm.setVolume(0);
         
-        // 第一阶段：0 -> 10% (0-0.75秒)
+        // 第一阶段：0 -> 10% (0-1.25秒)
         this.tweens.add({
             targets: this.currentBgm,
             volume: targetVolume * 0.1,
-            duration: 750,
+            duration: 1250,
             onComplete: () => {
-                // 第二阶段：10% -> 40% (0.75-1.5秒)
+                // 第二阶段：10% -> 40% (1.25-2.5秒)
                 this.tweens.add({
                     targets: this.currentBgm,
                     volume: targetVolume * 0.4,
-                    duration: 750,
+                    duration: 1250,
                     onComplete: () => {
-                        // 第三阶段：40% -> 70% (1.5-2.25秒)
+                        // 第三阶段：40% -> 70% (2.5-3.75秒)
                         this.tweens.add({
                             targets: this.currentBgm,
                             volume: targetVolume * 0.7,
-                            duration: 750,
+                            duration: 1250,
                             onComplete: () => {
-                                // 第四阶段：70% -> 100% (2.25-3秒)
+                                // 第四阶段：70% -> 100% (3.75-5秒)
                                 this.tweens.add({
                                     targets: this.currentBgm,
                                     volume: targetVolume,
-                                    duration: 750
+                                    duration: 1250
                                 });
                             }
                         });
@@ -1151,8 +1188,9 @@ class MainScene extends Phaser.Scene {
         const overlay = this.add.rectangle(cx, cy, px(GAME_WIDTH), px(GAME_HEIGHT), 0x000000, 0.6).setDepth(400).setInteractive();
         
         // 主面板
+        // v1.1.9: 增加高度以容纳提示文案
         const panelW = px(Math.min(GAME_WIDTH * 0.8, 400));
-        const panelH = px(450);
+        const panelH = px(500);
         const panelBg = this.add.rectangle(cx, cy, panelW, panelH, 0xF8D5D2, 0.95).setDepth(401);
         const panelBorder = this.add.rectangle(cx, cy, panelW, panelH, 0xA4B4C4, 0).setDepth(401).setStrokeStyle(px(3), 0xFFB6C1, 1);
         
@@ -1207,9 +1245,10 @@ class MainScene extends Phaser.Scene {
         y += px(60);
         
         // 关注Mimic谷店按钮（v1.1.4: iOS兼容跳转，使用网页链接）
-        const btnMimic = this.add.rectangle(cx, y, px(200), px(44), 0xA4B4C4, 1)
+        // v1.1.9: 颜色统一为#cd0303
+        const btnMimic = this.add.rectangle(cx, y, px(200), px(44), 0xcd0303, 1)
             .setInteractive({ useHandCursor: true }).setDepth(402)
-            .setStrokeStyle(px(2), 0xFFB6C1, 1)
+            .setStrokeStyle(px(2), 0xcd0303, 1)
             .on('pointerdown', () => {
                 // v1.1.4: 使用网页链接跳转（iOS兼容）
                 window.location.href = MIMIC_URL;
@@ -1239,13 +1278,22 @@ class MainScene extends Phaser.Scene {
             fontFamily: 'Arial',
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(403);
+        y += px(50);
+        
+        // v1.1.9: 关闭按钮下方新增提示文案
+        const tHint = this.add.text(cx, y, '提示：本游戏一共有18款\n最终大海景（不含V家人物）', {
+            fontSize: fs(14),
+            fill: '#666',
+            fontFamily: 'Arial',
+            align: 'center'
+        }).setOrigin(0.5, 0).setDepth(402).setWordWrapWidth(panelW - px(40));
         
         // v1.1.3: 保存面板元素引用（包括所有文本标签）
         this.settingsPanel = {
             overlay, panelBg, panelBorder, tTitle, 
             tBgmLabel, bgmSlider, bgmHandle, 
             tSfxLabel, sfxSlider, sfxHandle,
-            btnMimic, tMimic, btnClose, tClose
+            btnMimic, tMimic, btnClose, tClose, tHint
         };
     }
     
@@ -1255,16 +1303,81 @@ class MainScene extends Phaser.Scene {
     closeSettingsPanel() {
         if (!this.settingsPanel) return;
         // v1.1.3: 销毁所有元素，包括文本标签
+        // v1.1.9: 包括提示文案
         const elements = [
             this.settingsPanel.overlay, this.settingsPanel.panelBg, this.settingsPanel.panelBorder,
             this.settingsPanel.tTitle, 
             this.settingsPanel.tBgmLabel, this.settingsPanel.bgmSlider, this.settingsPanel.bgmHandle,
             this.settingsPanel.tSfxLabel, this.settingsPanel.sfxSlider, this.settingsPanel.sfxHandle,
             this.settingsPanel.btnMimic, this.settingsPanel.tMimic,
-            this.settingsPanel.btnClose, this.settingsPanel.tClose
+            this.settingsPanel.btnClose, this.settingsPanel.tClose, this.settingsPanel.tHint
         ];
         elements.forEach(el => { if (el && el.destroy) el.destroy(); });
         this.settingsPanel = null;
+    }
+    
+    /**
+     * v1.1.9: 设置页面可见性监听，修复Safari切换后背景音乐消失的问题
+     */
+    setupVisibilityListener() {
+        // 保存this引用，以便在事件回调中使用
+        const scene = this;
+        
+        // 监听页面可见性变化
+        document.addEventListener('visibilitychange', function() {
+            // 页面变为可见时（从后台切换回来）
+            if (!document.hidden) {
+                // 延迟一小段时间，确保页面完全恢复
+                scene.time.delayedCall(100, () => {
+                    scene.restoreBackgroundMusic();
+                });
+            }
+        });
+        
+        // 同时监听 window focus 事件（作为备用）
+        window.addEventListener('focus', function() {
+            scene.time.delayedCall(100, () => {
+                scene.restoreBackgroundMusic();
+            });
+        });
+    }
+    
+    /**
+     * v1.1.9: 恢复背景音乐播放
+     * 当页面从后台恢复时，检查并恢复背景音乐
+     */
+    restoreBackgroundMusic() {
+        // 如果游戏已结束、欢迎POPUP显示中、或设置面板打开，不恢复音乐
+        if (gameState.gameOver || gameState.showWelcomePopup || this.settingsPanel) {
+            return;
+        }
+        
+        // 如果当前有背景音乐对象
+        if (this.currentBgm) {
+            // 检查音频是否已停止（可能是Safari暂停了）
+            if (!this.currentBgm.isPlaying) {
+                // 尝试恢复播放
+                try {
+                    // 重新设置音量（确保音量正确）
+                    this.currentBgm.setVolume(gameState.bgmVolume);
+                    // 尝试播放
+                    this.currentBgm.play();
+                } catch (e) {
+                    // 如果播放失败，重新启动背景音乐
+                    console.warn('恢复背景音乐播放失败，重新启动:', e);
+                    this.startBackgroundMusic();
+                }
+            } else {
+                // 如果正在播放，确保音量正确（可能被重置）
+                this.currentBgm.setVolume(gameState.bgmVolume);
+            }
+        } else {
+            // 如果没有背景音乐对象，重新启动
+            // 只有在游戏已经开始（欢迎POPUP已关闭）时才启动
+            if (!gameState.showWelcomePopup) {
+                this.startBackgroundMusic();
+            }
+        }
     }
 
     /**
@@ -1404,9 +1517,130 @@ class MainScene extends Phaser.Scene {
         }).setOrigin(0.5).setDepth(203);
         
         const winRefs = [overlay, panelBg, panelBorder, tTitle, tSub, btnEnd, btnGo, t1, t2];
-        const closeWin = () => { winRefs.forEach(o => o && o.destroy && o.destroy()); };
+        // v1.1.9: 保存胜利弹窗引用，以便清理
+        this.winPopupElements = winRefs;
+        const closeWin = () => { winRefs.forEach(o => o && o.destroy && o.destroy()); this.winPopupElements = null; };
         btnEnd.on('pointerdown', () => { closeWin(); this.endGame(true); });
         btnGo.on('pointerdown', () => { closeWin(); });
+    }
+
+    /**
+     * v1.1.9: 重置游戏（不刷新页面，内部重置）
+     * 清理所有游戏对象和状态，重新开始游戏
+     */
+    restartGame() {
+        // 1. 停止背景音乐
+        if (this.currentBgm && this.currentBgm.isPlaying) {
+            this.currentBgm.stop();
+            this.currentBgm = null;
+        }
+        
+        // 2. 停止OP音乐（如果存在）
+        if (this.opMusic && this.opMusic.isPlaying) {
+            this.opMusic.stop();
+            this.opMusic = null;
+        }
+        
+        // 3. 清理所有吧唧对象
+        gameState.badges.forEach(badge => {
+            if (badge && badge.body) {
+                this.matter.world.remove(badge.body);
+            }
+            if (badge) badge.destroy();
+        });
+        gameState.badges = [];
+        
+        // 4. 清理流星效果
+        if (this.meteors && this.meteors.length > 0) {
+            this.meteors.forEach(meteor => {
+                if (meteor.emoji && meteor.emoji.destroy) meteor.emoji.destroy();
+                if (meteor.trail && meteor.trail.destroy) meteor.trail.destroy();
+            });
+            this.meteors = [];
+        }
+        this.meteorTimer = 0;
+        
+        // 5. 清理斩杀线
+        if (this.killLineBlinkTween) {
+            this.killLineBlinkTween.stop();
+            this.killLineBlinkTween = null;
+        }
+        if (this.killLine) {
+            this.killLine.destroy();
+            this.killLine = null;
+        }
+        this.overKillLineTime = 0;
+        
+        // 6. 销毁结算页面元素
+        if (this.resultScreenElements) {
+            this.resultScreenElements.forEach(el => {
+                if (el && el.destroy) el.destroy();
+            });
+            this.resultScreenElements = null;
+        }
+        
+        // 7. 销毁恢复按钮
+        if (this.btnRestore) {
+            this.btnRestore.destroy();
+            this.btnRestore = null;
+        }
+        if (this.tRestore) {
+            this.tRestore.destroy();
+            this.tRestore = null;
+        }
+        
+        // 8. 清理胜利弹窗（如果存在）
+        if (this.winPopupElements) {
+            this.winPopupElements.forEach(el => {
+                if (el && el.destroy) el.destroy();
+            });
+            this.winPopupElements = null;
+        }
+        
+        // 9. 清理欢迎POPUP（如果存在）
+        if (this.welcomePopupElements) {
+            this.welcomePopupElements.forEach(el => {
+                if (el && el.destroy) el.destroy();
+            });
+            this.welcomePopupElements = null;
+        }
+        
+        // 10. 停止所有tweens
+        this.tweens.killAll();
+        
+        // 11. 清理所有定时器
+        this.time.removeAllEvents();
+        
+        // 12. 重置UI显示
+        if (this.scoreText) {
+            this.scoreText.setText('合计市价: $0');
+        }
+        if (this.dropsText) {
+            this.dropsText.setText('您已读博: 0个');
+        }
+        
+        // 13. 重置预览吧唧
+        if (this.previewBadge) {
+            this.previewBadge.destroy();
+            this.previewBadge = null;
+        }
+        
+        // 14. 清理合并标记集合
+        if (this.mergingBadges) {
+            this.mergingBadges.clear();
+        }
+        
+        // 15. 重新初始化游戏
+        this.initGame();
+        
+        // 16. 更新背景（重新随机选择）
+        this.updateBackground();
+        
+        // 17. 创建新的预览吧唧
+        this.createPreviewBadge();
+        
+        // 18. 显示欢迎POPUP
+        this.showWelcomePopup();
     }
 
     /**
@@ -1422,11 +1656,12 @@ class MainScene extends Phaser.Scene {
         const finalIsWin = isWin || gameState.hasWon;
         
         // v1.1.2: 停止背景音乐（3秒渐出）
+        // v1.1.9: 渐出增加到5秒
         if (this.currentBgm && this.currentBgm.isPlaying) {
             this.tweens.add({
                 targets: this.currentBgm,
                 volume: 0,
-                duration: 3000,
+                duration: 5000,
                 onComplete: () => {
                     if (this.currentBgm) this.currentBgm.stop();
                 }
@@ -1559,9 +1794,10 @@ class MainScene extends Phaser.Scene {
         const btnSpacing = px(20);
         
         // 关注Mimic谷店按钮（v1.1.4: 粉色，iOS兼容跳转，使用网页链接）
-        const btnMimic = this.add.rectangle(cx, y, btnW, btnH, 0xFFB6C1, 1)
+        // v1.1.9: 颜色统一为#cd0303
+        const btnMimic = this.add.rectangle(cx, y, btnW, btnH, 0xcd0303, 1)
             .setInteractive({ useHandCursor: true }).setDepth(102)
-            .setStrokeStyle(px(2), 0xFFC0CB, 1)
+            .setStrokeStyle(px(2), 0xcd0303, 1)
             .on('pointerdown', () => {
                 // v1.1.4: 使用网页链接跳转（iOS兼容）
                 window.location.href = MIMIC_URL;
@@ -1633,10 +1869,11 @@ class MainScene extends Phaser.Scene {
         y += btnH + btnSpacing;
         
         // 朕知道了按钮（v1.1.4: 浅蓝色）
+        // v1.1.9: 改为内部重置，不刷新页面
         const btnKnow = this.add.rectangle(cx, y, btnW, btnH, 0xA4B4C4, 1)
             .setInteractive({ useHandCursor: true }).setDepth(102)
             .setStrokeStyle(px(2), 0xFFB6C1, 1)
-            .on('pointerdown', () => { location.reload(); })
+            .on('pointerdown', () => { this.restartGame(); })
             .on('pointerover', function() { this.setScale(1.05); })
             .on('pointerout', function() { this.setScale(1); });
         const tKnow = this.add.text(cx, y, '朕知道了', {
@@ -1901,6 +2138,15 @@ window.addEventListener('resize', () => {
     if (game && game.scale) {
         const newWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
         const newHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        game.scale.resize(newWidth, newHeight);
+        
+        // 方案A：WEB端限制为iPhone最大尺寸，移动端保持自适应
+        const finalWidth = isMobileDevice 
+            ? newWidth 
+            : Math.min(newWidth, MAX_IPHONE_WIDTH);
+        const finalHeight = isMobileDevice 
+            ? newHeight 
+            : Math.min(newHeight, MAX_IPHONE_HEIGHT);
+        
+        game.scale.resize(finalWidth, finalHeight);
     }
 });
