@@ -28,6 +28,7 @@
  * v1.2.1 - 开始页、结算页、设置面板新增「打赏作者」按钮，跳转爱发电打赏页
  * v1.2.2 - 游戏启动前新增加载页面，显示进度条与 "Now loading...."
  * v1.2.3 - 吧唧物理碰撞半径增加至视觉半径的 103%，减少“看似接触但不合成”的情况
+ * v1.2.4 - 合成时新增透明彩色三角碎片特效，丰富视觉反馈
  */
 
 // 屏幕尺寸计算（仅用于参考，不再直接决定游戏逻辑尺寸）
@@ -37,13 +38,24 @@ const screenSize = (() => {
     return { width, height };
 })();
 
-// v1.2.2+: 统一逻辑宽度：以接近 iPhone Pro 系列的竖屏比例为基准
-// 参考 iPhone 15/16 Pro Max 逻辑宽度：约 430
-const BASE_WIDTH = 430;
+// 设备类型检测（用于区分移动端和桌面端的逻辑高度策略）
+const isMobileDevice = (() => {
+    const ua = (navigator.userAgent || navigator.vendor || window.opera || '').toLowerCase();
+    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/.test(ua);
+})();
 
-// 所有机型共用同一套逻辑宽度，逻辑高度按设备当前可视比例动态计算
+// v1.2.2+: 统一逻辑宽度：以接近 iPhone Pro 系列的竖屏比例为基准
+// 参考 iPhone 15/16 Pro Max 逻辑宽度：约 430，默认竖屏高宽比约 932 / 430 ≈ 2.17
+const BASE_WIDTH = 430;
+const DEFAULT_ASPECT = 932 / 430; // 用于桌面 / 宽屏环境
+
+// 所有机型共用同一套逻辑宽度：
+// - 移动端：逻辑高度按当前可视比例动态计算，减少手机上的黑边
+// - 桌面端：固定为默认竖屏比例，避免高度过低导致内容被裁掉
 const GAME_WIDTH = BASE_WIDTH;
-const GAME_HEIGHT = Math.round(BASE_WIDTH * (screenSize.height / screenSize.width));
+const GAME_HEIGHT = isMobileDevice
+    ? Math.round(BASE_WIDTH * (screenSize.height / screenSize.width))
+    : Math.round(BASE_WIDTH * DEFAULT_ASPECT);
 const KILL_LINE_Y = GAME_HEIGHT / 6.67;       // 斩杀线位置（屏幕上方1/6.67处）
 const PREVIEW_Y = KILL_LINE_Y - 50;           // 预览下一吧唧的 y（斩杀线上方居中）
 const KILL_PROTECTION_MS = 2000;              // 新吧唧释放后保护时间（毫秒）
@@ -101,6 +113,66 @@ let gameState = {
 class MainScene extends Phaser.Scene {
     constructor() {
         super({ key: 'MainScene' });
+    }
+
+    /**
+     * v1.2.4: 合成三角形彩色碎片特效
+     * 在指定位置生成多枚半透明的彩色三角形，向四周飞散并渐隐。
+     */
+    spawnMergeTriangles(cx, cy) {
+        const count = 14; // 三角数量（稍微多一点）
+        // 仅使用明亮的糖果色配色
+        const colors = [
+            0xFFEB3B, // 明黄
+            0xFFB3E5, // 粉紫
+            0x80DEEA, // 浅蓝
+            0xA5D6A7  // 淡绿
+        ];
+
+        for (let i = 0; i < count; i++) {
+            const size = px(18 + Math.random() * 24); // 18~42 像素，更大一些
+            const angle = Math.random() * Math.PI * 2;
+            const dist = px(24 + Math.random() * 36); // 飞散距离增大
+            const startX = cx + Math.cos(angle) * px(5);
+            const startY = cy + Math.sin(angle) * px(5);
+            const endX = cx + Math.cos(angle) * dist;
+            const endY = cy + Math.sin(angle) * dist;
+
+            const color = colors[Math.floor(Math.random() * colors.length)];
+
+            // 使用 Graphics 绘制三角形
+            const g = this.add.graphics();
+            g.fillStyle(color, 0.65);
+            g.lineStyle(px(1), 0xffffff, 0.4);
+
+            const h = size * Math.sin(Math.PI / 3); // 等边三角形高
+            g.beginPath();
+            g.moveTo(0, -h / 2);
+            g.lineTo(-size / 2, h / 2);
+            g.lineTo(size / 2, h / 2);
+            g.closePath();
+            g.fillPath();
+            g.strokePath();
+
+            g.setPosition(startX, startY);
+            g.setAngle((angle * 180) / Math.PI + (Math.random() * 60 - 30)); // 初始随机旋转
+            g.setDepth(210);
+
+            // 三角形飞散 + 渐隐动画（更持久）
+            this.tweens.add({
+                targets: g,
+                x: endX,
+                y: endY,
+                alpha: { from: 1, to: 0 },
+                scale: { from: 0.95, to: 1.6 },
+                angle: g.angle + (Math.random() * 240 - 120),
+                duration: 520 + Math.random() * 320,
+                ease: 'Cubic.easeOut',
+                onComplete: () => {
+                    g.destroy();
+                }
+            });
+        }
     }
 
     preload() {
@@ -773,8 +845,8 @@ class MainScene extends Phaser.Scene {
         const safeY = isNaN(y) ? px(KILL_LINE_Y - 50) : Math.max(px(config.radius), y);
         
         // 创建物理图片对象
-        // v1.2.3: 将物理碰撞半径放大到视觉半径的 103%，减少“看似接触但不合成”的情况
-        const physicsRadius = px(config.radius) * 1.03;
+        // v1.2.3: 将物理碰撞半径放大到视觉半径的 101image.png%，减少“看似接触但不合成”的情况
+        const physicsRadius = px(config.radius) * 1.01;
         const badge = this.matter.add.image(safeX, safeY, key, null, {
             shape: 'circle',
             radius: physicsRadius,
@@ -883,6 +955,9 @@ class MainScene extends Phaser.Scene {
             alpha: 0.9,
             duration: 80,
             onComplete: () => {
+                // v1.2.4: 合成特效 - 透明彩色三角碎片
+                this.spawnMergeTriangles(midX, midY);
+
                 gameState.badges = gameState.badges.filter(b => b !== badgeB);
                 if (badgeB.body) this.matter.world.remove(badgeB.body);
                 badgeB.destroy();
