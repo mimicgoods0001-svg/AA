@@ -25,32 +25,25 @@
  * v1.1.8 - 统一合成糕特成功POPUP设计；合成糕特成功后继续玩被斩杀线判定失败时按成功处理
  * v1.1.9 - 音乐渐入渐出增加到5秒；新增吧唧图片（5级2款、6级1款、糕特2款）；关注Mimic谷店按钮颜色统一为#cd0303；设置按钮改为？icon并新增提示文案；昼间模式新增5种随机背景色；修复Safari切换后背景音乐消失问题
  * v1.2.0 - 结算页面"朕知道了"按钮改为H5内部重置，不刷新页面
+ * v1.2.1 - 开始页、结算页、设置面板新增「打赏作者」按钮，跳转爱发电打赏页
+ * v1.2.2 - 游戏启动前新增加载页面，显示进度条与 "Now loading...."
  */
 
-// 屏幕尺寸计算（考虑移动端浏览器UI）
+// 屏幕尺寸计算（仅用于参考，不再直接决定游戏逻辑尺寸）
 const screenSize = (() => {
     const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
     const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
     return { width, height };
 })();
 
-// 检测是否为移动设备
-const isMobileDevice = (() => {
-    const userAgent = navigator.userAgent || navigator.vendor || window.opera;
-    return /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i.test(userAgent.toLowerCase());
-})();
+// v1.2.2+: 统一逻辑分辨率：以大安卓为基准
+// 示例：宽 480 × 高 1040（可根据实际大屏安卓机型微调）
+const BASE_WIDTH = 480;
+const BASE_HEIGHT = 1040;
 
-// 方案A：WEB端限制为iPhone最大尺寸（430x932），移动端保持自适应
-const MAX_IPHONE_WIDTH = 430;
-const MAX_IPHONE_HEIGHT = 932;
-
-const GAME_WIDTH = isMobileDevice 
-    ? screenSize.width  // 移动端：使用实际屏幕尺寸
-    : Math.min(screenSize.width, MAX_IPHONE_WIDTH);  // WEB端：限制最大宽度
-
-const GAME_HEIGHT = isMobileDevice 
-    ? screenSize.height  // 移动端：使用实际屏幕尺寸
-    : Math.min(screenSize.height, MAX_IPHONE_HEIGHT);  // WEB端：限制最大高度
+// 所有机型共用同一套逻辑游戏空间，Phaser 负责等比缩放到屏幕
+const GAME_WIDTH = BASE_WIDTH;
+const GAME_HEIGHT = BASE_HEIGHT;
 const KILL_LINE_Y = GAME_HEIGHT / 6.67;       // 斩杀线位置（屏幕上方1/6.67处）
 const PREVIEW_Y = KILL_LINE_Y - 50;           // 预览下一吧唧的 y（斩杀线上方居中）
 const KILL_PROTECTION_MS = 2000;              // 新吧唧释放后保护时间（毫秒）
@@ -111,6 +104,64 @@ class MainScene extends Phaser.Scene {
     }
 
     preload() {
+        // v1.2.2: 启动加载页面（进度条 + Now loading...）
+        const cam = this.cameras.main;
+        const cw = cam.width;
+        const ch = cam.height;
+        const cx = cw / 2;
+        const cy = ch / 2;
+
+        const barWidth = cw * 0.6;
+        const barHeight = px(16);
+
+        // 深色背景遮罩
+        this.loadingOverlay = this.add.rectangle(cx, cy, cw, ch, 0x000000, 0.7).setDepth(800);
+
+        // 进度条背景 & 前景
+        this.loadingBarBg = this.add.rectangle(cx, cy, barWidth, barHeight, 0xffffff, 0.25)
+            .setDepth(801)
+            .setStrokeStyle(px(2), 0xffffff, 0.6);
+        this.loadingBarFill = this.add.rectangle(cx - barWidth / 2, cy, 0, barHeight, 0xffffff, 0.9)
+            .setOrigin(0, 0.5)
+            .setDepth(802);
+
+        // 提示文字：Now loading....
+        this.loadingText = this.add.text(cx, cy - barHeight * 3, 'Now loading....', {
+            fontSize: fs(18),
+            fill: '#ffffff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(803);
+
+        // 次级提示：Now loading....
+        this.loadingSubText = this.add.text(cx, cy + barHeight * 3, 'Now loading....', {
+            fontSize: fs(14),
+            fill: '#dddddd',
+            fontFamily: 'Arial'
+        }).setOrigin(0.5).setDepth(803);
+
+        // 进度监听
+        this.load.on('progress', (value) => {
+            if (this.loadingBarFill) {
+                this.loadingBarFill.width = barWidth * value;
+            }
+        });
+
+        this.load.once('complete', () => {
+            // 资源加载完成后，淡出并销毁加载界面
+            this.tweens.add({
+                targets: [this.loadingOverlay, this.loadingBarBg, this.loadingBarFill, this.loadingText, this.loadingSubText],
+                alpha: 0,
+                duration: 400,
+                onComplete: () => {
+                    [this.loadingOverlay, this.loadingBarBg, this.loadingBarFill, this.loadingText, this.loadingSubText].forEach(o => {
+                        if (o && o.destroy) o.destroy();
+                    });
+                    this.loadingOverlay = this.loadingBarBg = this.loadingBarFill = this.loadingText = this.loadingSubText = null;
+                }
+            });
+        });
+
         // 加载所有吧唧图片（保留原有路径）
         BADGE_LEVELS.forEach(level => {
             level.variants.forEach(variant => {
@@ -267,10 +318,10 @@ class MainScene extends Phaser.Scene {
             fontFamily: '"Arial Rounded MT Bold", "Helvetica Rounded", "Comic Sans MS", Arial, sans-serif'
         });
         
-        // 您已读博显示（v1.1.1: 添加"个"）
+        // 您已读博显示
         const scoreFontSize = Math.round(20 * DPR);
         const dropsY = scoreY + scoreFontSize * 1.2;
-        this.dropsText = this.add.text(px(20), dropsY, '您已读博: 0个', {
+        this.dropsText = this.add.text(px(20), dropsY, '您已读博: 0次', {
             fontSize: fs(20),
             fill: '#fff',
             stroke: '#87CEEB',
@@ -408,8 +459,13 @@ class MainScene extends Phaser.Scene {
         }).setOrigin(0.5, 0).setDepth(302).setWordWrapWidth(panelW - px(60));
         y += tDesc2.height + px(50);
         
+        // 按钮统一宽度与间距
+        const btnMainW = px(240);
+        const btnMainH = px(50);
+        const btnMainSpacing = px(70);
+        
         // 开始游戏按钮（底色改为#A4B4C4）
-        const btnStart = this.add.rectangle(cx, y, px(220), px(50), 0xA4B4C4, 1)
+        const btnStart = this.add.rectangle(cx, y, btnMainW, btnMainH, 0xA4B4C4, 1)
             .setInteractive({ useHandCursor: true }).setDepth(302)
             .setStrokeStyle(px(3), 0xFFC0CB, 1)
             .on('pointerdown', () => {
@@ -445,11 +501,28 @@ class MainScene extends Phaser.Scene {
             fontFamily: 'Arial',
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(303);
-        y += px(60);
+        y += btnMainSpacing;
+
+        // v1.2.1: 打赏作者按钮（爱发电）
+        const TIP_URL = 'https://www.ifdian.net/a/mimicstore';
+        const btnTip = this.add.rectangle(cx, y, btnMainW, btnMainH, 0x9475D6, 1)
+            .setInteractive({ useHandCursor: true }).setDepth(302)
+            .on('pointerdown', () => {
+                window.location.href = TIP_URL;
+            })
+            .on('pointerover', function() { this.setScale(1.05); })
+            .on('pointerout', function() { this.setScale(1); });
+        const tTip = this.add.text(cx, y, '打赏作者', {
+            fontSize: fs(16),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(303);
+        y += btnMainSpacing;
         
         // 关注Mimic谷店按钮（v1.1.2: iOS兼容跳转，改为粉色）
         // v1.1.9: 颜色统一为#cd0303
-        const btnMimic = this.add.rectangle(cx, y, px(240), px(44), 0xcd0303, 1)
+        const btnMimic = this.add.rectangle(cx, y, btnMainW, btnMainH, 0xcd0303, 1)
             .setInteractive({ useHandCursor: true }).setDepth(302)
             .setStrokeStyle(px(2), 0xcd0303, 1)
             .on('pointerdown', () => {
@@ -465,29 +538,6 @@ class MainScene extends Phaser.Scene {
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(303);
         y += px(50);
-        
-        // v1.1.3: 添加Mimic谷店logo（保持长宽比，向下移动，放大1倍）
-        const logoMaxSize = px(160);
-        const logoY = y + px(20); // 向下移动一些
-        const logoImg = this.add.image(cx, logoY, 'mimicStore');
-        // 获取原始图片尺寸，保持长宽比
-        const logoTexture = this.textures.get('mimicStore');
-        const logoOrigWidth = logoTexture.source[0].width;
-        const logoOrigHeight = logoTexture.source[0].height;
-        const logoAspectRatio = logoOrigWidth / logoOrigHeight;
-        let logoDisplayWidth, logoDisplayHeight;
-        if (logoAspectRatio > 1) {
-            // 宽大于高
-            logoDisplayWidth = logoMaxSize;
-            logoDisplayHeight = logoMaxSize / logoAspectRatio;
-        } else {
-            // 高大于等于宽
-            logoDisplayHeight = logoMaxSize;
-            logoDisplayWidth = logoMaxSize * logoAspectRatio;
-        }
-        logoImg.setDisplaySize(logoDisplayWidth, logoDisplayHeight);
-        logoImg.setOrigin(0.5);
-        logoImg.setDepth(303);
         
         // v1.1.2: 播放OP音乐（2秒渐入）
         // v1.1.3: 修复播放问题 - 延迟播放确保音频已加载
@@ -538,7 +588,7 @@ class MainScene extends Phaser.Scene {
         });
         
         // v1.1.3: 保存所有元素引用以便销毁
-        this.welcomePopupElements = [overlay, panelBg, panelBorder, btnStart, btnMimic, tTitle, tWelcome, tDesc1, tDesc2, tStart, tMimic, logoImg];
+        this.welcomePopupElements = [overlay, panelBg, panelBorder, btnStart, btnTip, btnMimic, tTitle, tWelcome, tDesc1, tDesc2, tStart, tTip, tMimic];
     }
     
     createPreviewBadge() {
@@ -681,8 +731,8 @@ class MainScene extends Phaser.Scene {
         
         gameState.isDropping = true;
         gameState.totalDrops += 1;
-        // v1.1.1: 更新"您已读博"显示（添加"个"）
-        if (this.dropsText) this.dropsText.setText(`您已读博: ${gameState.totalDrops}个`);
+        // 更新"您已读博"显示
+        if (this.dropsText) this.dropsText.setText(`您已读博: ${gameState.totalDrops}次`);
         const level = gameState.nextBadgeLevel;
         gameState.nextBadgeLevel = this.calculateNextBadgeLevel();
         this.updatePreviewBadge();
@@ -872,6 +922,9 @@ class MainScene extends Phaser.Scene {
         if (this.scoreText) {
             this.scoreText.setText(`合计市价: $${currentScore.toLocaleString()}`);
         }
+
+        // v1.2.1: 轻微磁吸 - 同级吧唧在接近时互相靠拢（吸附半径约为 1.1× 合并半径）
+        this.applyBadgeAttraction();
         
         // v1.1.2: 检查背景音乐（如果当前音乐播放完毕，播放下一首）
         if (!gameState.showWelcomePopup && this.currentBgm && !this.currentBgm.isPlaying) {
@@ -883,6 +936,73 @@ class MainScene extends Phaser.Scene {
         
         // 检查斩杀线
         this.checkKillLine();
+    }
+
+    /**
+     * v1.2.1: 吧唧轻微磁吸
+     * 同等级吧唧在距离略大于接触半径（约 1.1×）时，给予轻微的相互靠拢速度。
+     * - 不直接触发合成，仍然依赖 Matter 的真实碰撞
+     * - 只对非合并中的、仍然 active 的吧唧生效
+     */
+    applyBadgeAttraction() {
+        // 欢迎弹窗或设置面板打开时不做吸附，避免干扰
+        if (gameState.showWelcomePopup || this.settingsPanel) return;
+        const badges = gameState.badges;
+        const count = badges.length;
+        if (count < 2) return;
+
+        const baseStrength = 0.003; // 吸附强度（可按需要微调）
+
+        for (let i = 0; i < count; i++) {
+            const a = badges[i];
+            if (!a || !a.active || !a.body) continue;
+            if (a.getData('isMerging')) continue;
+            const levelA = a.getData('level');
+            if (levelA === undefined) continue;
+            const configA = BADGE_LEVELS[levelA - 1];
+            if (!configA) continue;
+            const rA = px(configA.radius);
+
+            for (let j = i + 1; j < count; j++) {
+                const b = badges[j];
+                if (!b || !b.active || !b.body) continue;
+                if (b.getData('isMerging')) continue;
+
+                const levelB = b.getData('level');
+                if (levelB === undefined) continue;
+                // 只对同等级、且未到最高级的吧唧做吸附
+                if (levelA !== levelB || levelA >= 11) continue;
+
+                const configB = BADGE_LEVELS[levelB - 1];
+                if (!configB) continue;
+                const rB = px(configB.radius);
+
+                const dx = b.x - a.x;
+                const dy = b.y - a.y;
+                const distSq = dx * dx + dy * dy;
+                if (distSq === 0) continue;
+
+                const dist = Math.sqrt(distSq);
+                const mergeDist = rA + rB;          // 接触时的中心距离
+                const attractDist = mergeDist * 1.1; // 吸附范围上限（1.1×）
+
+                // 只有在「刚好还没碰到，但已经很近」的范围内才施加吸附
+                if (dist <= mergeDist || dist >= attractDist) continue;
+
+                const nx = dx / dist;
+                const ny = dy / dist;
+                // 距离越近，吸力越强（线性缩放）
+                const t = (attractDist - dist) / (attractDist - mergeDist);
+                const strength = baseStrength * t;
+
+                // A 向 B 靠拢，B 向 A 靠拢（速度轻微调整）
+                const va = a.body.velocity;
+                const vb = b.body.velocity;
+
+                a.setVelocity(va.x + nx * strength * 0.5, va.y + ny * strength * 0.5);
+                b.setVelocity(vb.x - nx * strength * 0.5, vb.y - ny * strength * 0.5);
+            }
+        }
     }
     
     /**
@@ -1205,10 +1325,12 @@ class MainScene extends Phaser.Scene {
             stroke: '#A4B4C4',
             strokeThickness: px(2)
         }).setOrigin(0.5).setDepth(402);
-        y += px(60);
+        // 统一三个按钮间距
+        const btnSettingsSpacing = px(50);
+        y += btnSettingsSpacing;
         
-        // 背景音乐音量（v1.1.3: 保存文本引用以便销毁）
-        const tBgmLabel = this.add.text(cx - px(80), y, '背景音乐', {
+        // BGM音量（v1.1.3: 保存文本引用以便销毁）
+        const tBgmLabel = this.add.text(cx - px(80), y, 'BGM', {
             fontSize: fs(18),
             fill: '#666',
             fontFamily: 'Arial'
@@ -1244,6 +1366,23 @@ class MainScene extends Phaser.Scene {
             });
         y += px(60);
         
+        // v1.2.1: 打赏作者按钮（爱发电）
+        const TIP_URL = 'https://www.ifdian.net/a/mimicstore';
+        const btnTip = this.add.rectangle(cx, y, px(200), px(44), 0x9475D6, 1)
+            .setInteractive({ useHandCursor: true }).setDepth(402)
+            .on('pointerdown', () => {
+                window.location.href = TIP_URL;
+            })
+            .on('pointerover', function() { this.setScale(1.05); })
+            .on('pointerout', function() { this.setScale(1); });
+        const tTip = this.add.text(cx, y, '打赏作者', {
+            fontSize: fs(16),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(403);
+        y += btnSettingsSpacing;
+        
         // 关注Mimic谷店按钮（v1.1.4: iOS兼容跳转，使用网页链接）
         // v1.1.9: 颜色统一为#cd0303
         const btnMimic = this.add.rectangle(cx, y, px(200), px(44), 0xcd0303, 1)
@@ -1261,10 +1400,10 @@ class MainScene extends Phaser.Scene {
             fontFamily: 'Arial',
             fontStyle: 'bold'
         }).setOrigin(0.5).setDepth(403);
-        y += px(60);
+        y += btnSettingsSpacing;
         
-        // 关闭按钮
-        const btnClose = this.add.rectangle(cx, y, px(150), px(40), 0xFFB6C1, 1)
+        // 关闭按钮（与前两项统一宽高）
+        const btnClose = this.add.rectangle(cx, y, px(200), px(44), 0xFFB6C1, 1)
             .setInteractive({ useHandCursor: true }).setDepth(402)
             .setStrokeStyle(px(2), 0xFFC0CB, 1)
             .on('pointerdown', () => {
@@ -1293,6 +1432,7 @@ class MainScene extends Phaser.Scene {
             overlay, panelBg, panelBorder, tTitle, 
             tBgmLabel, bgmSlider, bgmHandle, 
             tSfxLabel, sfxSlider, sfxHandle,
+            btnTip, tTip,
             btnMimic, tMimic, btnClose, tClose, tHint
         };
     }
@@ -1309,6 +1449,7 @@ class MainScene extends Phaser.Scene {
             this.settingsPanel.tTitle, 
             this.settingsPanel.tBgmLabel, this.settingsPanel.bgmSlider, this.settingsPanel.bgmHandle,
             this.settingsPanel.tSfxLabel, this.settingsPanel.sfxSlider, this.settingsPanel.sfxHandle,
+            this.settingsPanel.btnTip, this.settingsPanel.tTip,
             this.settingsPanel.btnMimic, this.settingsPanel.tMimic,
             this.settingsPanel.btnClose, this.settingsPanel.tClose, this.settingsPanel.tHint
         ];
@@ -1793,6 +1934,23 @@ class MainScene extends Phaser.Scene {
         const btnH = px(44);
         const btnSpacing = px(20);
         
+        // v1.2.1: 打赏作者按钮（爱发电）
+        const TIP_URL = 'https://www.ifdian.net/a/mimicstore';
+        const btnTip = this.add.rectangle(cx, y, btnW, btnH, 0x9475D6, 1)
+            .setInteractive({ useHandCursor: true }).setDepth(102)
+            .on('pointerdown', () => {
+                window.location.href = TIP_URL;
+            })
+            .on('pointerover', function() { this.setScale(1.05); })
+            .on('pointerout', function() { this.setScale(1); });
+        const tTip = this.add.text(cx, y, '打赏作者', {
+            fontSize: fs(16),
+            fill: '#fff',
+            fontFamily: 'Arial',
+            fontStyle: 'bold'
+        }).setOrigin(0.5).setDepth(103);
+        y += btnH + btnSpacing;
+        
         // 关注Mimic谷店按钮（v1.1.4: 粉色，iOS兼容跳转，使用网页链接）
         // v1.1.9: 颜色统一为#cd0303
         const btnMimic = this.add.rectangle(cx, y, btnW, btnH, 0xcd0303, 1)
@@ -1887,6 +2045,7 @@ class MainScene extends Phaser.Scene {
         // v1.1.5: 保存结算画面元素，用于隐藏/恢复功能（已删除cardBg背景框）
         this.resultScreenElements = [overlay, panelBg, panelBorder, tTitle, tSubtitle, 
             tDropsLabel, tMergesLabel, tDrops, tMerges, tTitleName,
+            btnTip, tTip,
             btnMimic, tMimic, btnPic, tPic, btnKnow, tKnow];
         
         // 初始化恢复按钮（初始隐藏）
@@ -2136,17 +2295,8 @@ const game = new Phaser.Game(config);
 // 窗口大小改变时重新调整
 window.addEventListener('resize', () => {
     if (game && game.scale) {
-        const newWidth = window.visualViewport ? window.visualViewport.width : window.innerWidth;
-        const newHeight = window.visualViewport ? window.visualViewport.height : window.innerHeight;
-        
-        // 方案A：WEB端限制为iPhone最大尺寸，移动端保持自适应
-        const finalWidth = isMobileDevice 
-            ? newWidth 
-            : Math.min(newWidth, MAX_IPHONE_WIDTH);
-        const finalHeight = isMobileDevice 
-            ? newHeight 
-            : Math.min(newHeight, MAX_IPHONE_HEIGHT);
-        
-        game.scale.resize(finalWidth, finalHeight);
+        // 统一逻辑分辨率下，仅通知 Phaser 维持固定逻辑尺寸；
+        // 实际等比缩放由 Scale.FIT 和浏览器负责。
+        game.scale.resize(px(GAME_WIDTH), px(GAME_HEIGHT));
     }
 });
