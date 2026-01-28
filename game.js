@@ -27,6 +27,7 @@
  * v1.2.0 - 结算页面"朕知道了"按钮改为H5内部重置，不刷新页面
  * v1.2.1 - 开始页、结算页、设置面板新增「打赏作者」按钮，跳转爱发电打赏页
  * v1.2.2 - 游戏启动前新增加载页面，显示进度条与 "Now loading...."
+ * v1.2.3 - 吧唧物理碰撞半径增加至视觉半径的 103%，减少“看似接触但不合成”的情况
  */
 
 // 屏幕尺寸计算（仅用于参考，不再直接决定游戏逻辑尺寸）
@@ -772,9 +773,11 @@ class MainScene extends Phaser.Scene {
         const safeY = isNaN(y) ? px(KILL_LINE_Y - 50) : Math.max(px(config.radius), y);
         
         // 创建物理图片对象
+        // v1.2.3: 将物理碰撞半径放大到视觉半径的 103%，减少“看似接触但不合成”的情况
+        const physicsRadius = px(config.radius) * 1.03;
         const badge = this.matter.add.image(safeX, safeY, key, null, {
             shape: 'circle',
-            radius: px(config.radius),
+            radius: physicsRadius,
             restitution: 0.3, // 弹性
             friction: 0.1,    // 摩擦力
             frictionAir: 0.01  // 空气阻力
