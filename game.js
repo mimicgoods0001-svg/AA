@@ -36,14 +36,13 @@ const screenSize = (() => {
     return { width, height };
 })();
 
-// v1.2.2+: 统一逻辑分辨率：以接近 iPhone Pro 系列的竖屏比例为基准
-// 参考 iPhone 15/16 Pro Max 逻辑分辨率：约 430 × 932
+// v1.2.2+: 统一逻辑宽度：以接近 iPhone Pro 系列的竖屏比例为基准
+// 参考 iPhone 15/16 Pro Max 逻辑宽度：约 430
 const BASE_WIDTH = 430;
-const BASE_HEIGHT = 932;
 
-// 所有机型共用同一套逻辑游戏空间，Phaser 负责等比缩放到屏幕
+// 所有机型共用同一套逻辑宽度，逻辑高度按设备当前可视比例动态计算
 const GAME_WIDTH = BASE_WIDTH;
-const GAME_HEIGHT = BASE_HEIGHT;
+const GAME_HEIGHT = Math.round(BASE_WIDTH * (screenSize.height / screenSize.width));
 const KILL_LINE_Y = GAME_HEIGHT / 6.67;       // 斩杀线位置（屏幕上方1/6.67处）
 const PREVIEW_Y = KILL_LINE_Y - 50;           // 预览下一吧唧的 y（斩杀线上方居中）
 const KILL_PROTECTION_MS = 2000;              // 新吧唧释放后保护时间（毫秒）
