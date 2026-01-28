@@ -36,10 +36,10 @@ const screenSize = (() => {
     return { width, height };
 })();
 
-// v1.2.2+: 统一逻辑分辨率：以大安卓为基准
-// 示例：宽 480 × 高 1040（可根据实际大屏安卓机型微调）
-const BASE_WIDTH = 480;
-const BASE_HEIGHT = 1040;
+// v1.2.2+: 统一逻辑分辨率：以接近 iPhone Pro 系列的竖屏比例为基准
+// 参考 iPhone 15/16 Pro Max 逻辑分辨率：约 430 × 932
+const BASE_WIDTH = 430;
+const BASE_HEIGHT = 932;
 
 // 所有机型共用同一套逻辑游戏空间，Phaser 负责等比缩放到屏幕
 const GAME_WIDTH = BASE_WIDTH;
